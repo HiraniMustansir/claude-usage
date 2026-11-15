@@ -10,7 +10,9 @@ import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 const HOME = GLib.get_home_dir();
 const SCRIPT = `${HOME}/.local/bin/claude-usage-widget.py`;
 const ICON = `${HOME}/.local/share/icons/claude-usage-bot.svg`;
-const POLL_SECONDS = 15; // usage endpoint has no push; too low risks HTTP 429
+// How often the top bar re-reads usage. The script caches results and only calls the
+// API at most once a minute (backing off on HTTP 429), so this tick is cheap.
+const POLL_SECONDS = 15;
 
 export default class ClaudeUsageExtension extends Extension {
     enable() {
@@ -24,7 +26,7 @@ export default class ClaudeUsageExtension extends Extension {
         this._details = new PopupMenu.PopupMenuSection();
         this._button.menu.addMenuItem(this._details);
         this._button.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
-        this._button.menu.addAction('Refresh now', () => this._refresh());
+        this._button.menu.addAction('Refresh now', () => this._refresh(true));
         this._button.menu.addAction('Open usage window', () => GLib.spawn_async(null, ['python3', SCRIPT], null, GLib.SpawnFlags.SEARCH_PATH, null));
 
         this._button.menu.connect('open-state-changed', (_m, open) => { if (open) this._refresh(); });
@@ -36,11 +38,14 @@ export default class ClaudeUsageExtension extends Extension {
         });
     }
 
-    _refresh() {
+    _refresh(force = false) {
         if (this._busy)
             return;
         this._busy = true;
-        const proc = Gio.Subprocess.new(['python3', SCRIPT, '--panel'],
+        const argv = ['python3', SCRIPT, '--panel'];
+        if (force)
+            argv.push('--force');
+        const proc = Gio.Subprocess.new(argv,
             Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_SILENCE);
         proc.communicate_utf8_async(null, null, (p, res) => {
             this._busy = false;

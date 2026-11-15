@@ -13,7 +13,7 @@
 - **Top bar:** `<5-hour %> · <weekly %>` next to the pixel bot icon.
 - **Click it** for details (`5-hour: 42% · resets in 2h 30m`, `Weekly: …`), plus **Refresh now** and **Open usage window**.
 - **Usage window:** a small GTK window with a progress bar for each limit.
-- Refreshes every 15 seconds and whenever you open the menu.
+- Updates every 15 seconds from a shared cache, while calling the API at most once a minute. If it gets rate-limited, it backs off and keeps showing your last numbers.
 
 > Unofficial community project. Not affiliated with or endorsed by Anthropic.
 
@@ -104,14 +104,17 @@ On Wayland, apps can't force themselves on top. To keep the window above others,
 
 ## How it works
 
-There's no push or websocket for usage data, so the extension polls.
+There's no push or websocket for usage data, so the extension polls, carefully.
 
-1. Every 15 s, the extension runs `claude-usage-widget.py --panel`.
-2. The script reads Claude Code's access token from `~/.claude/.credentials.json`.
-3. It calls `GET https://api.anthropic.com/api/oauth/usage`, the same endpoint Claude Code's `/usage` command uses.
-4. It prints the top-bar text on line 1 and the menu items on the lines after it.
+1. Every 15 s (and when you open the menu), the extension runs `claude-usage-widget.py --panel`.
+2. The script checks a shared cache at `~/.cache/claude-usage/usage.json`. If the API was called less than 60 s ago, it uses the cached result with no network call.
+3. Otherwise it reads Claude Code's access token from `~/.claude/.credentials.json` and calls `GET https://api.anthropic.com/api/oauth/usage`, the same endpoint Claude Code's `/usage` command uses.
+4. On **HTTP 429** it backs off: it waits as long as the server's `Retry-After` header says, or else 2 min, then 4, 8, up to 15 min. Meanwhile it keeps showing your last known numbers.
+5. It prints the top-bar text on line 1 and the menu items on the lines after it.
 
-The token is sent only to `api.anthropic.com`. Nothing is stored or logged.
+The top bar, the usage window and **Refresh now** all share the same cache, so opening everything at once doesn't multiply API calls. **Refresh now** skips the 60 s wait (but not a rate-limit backoff).
+
+The token is sent only to `api.anthropic.com`. The cache stores only the usage numbers and timestamps, never the token.
 
 Script modes:
 
@@ -119,6 +122,7 @@ Script modes:
 |---|---|
 | `claude-usage-widget.py` | Opens the GTK usage window |
 | `claude-usage-widget.py --panel` | Prints text for the top bar and menu |
+| `claude-usage-widget.py --panel --force` | Same, but skips the 60 s cache wait |
 | `claude-usage-widget.py --selftest` | Runs the built-in checks |
 
 ## Troubleshooting
@@ -126,7 +130,7 @@ Script modes:
 | You see | Fix |
 |---|---|
 | `⚠ Token expired — open Claude Code once` | The login token expired. Open Claude Code once and it refreshes the token. |
-| `⚠ Error: HTTP Error 429` | Rate limited. Leave the poll interval at 15 s or higher. |
+| `Rate limited — retrying in …` in the menu | The API is throttling requests. The extension backs off by itself and keeps your last numbers, so just wait. If it happens often, raise `MIN_FETCH_SECONDS`. |
 | `⚠ Could not run usage script` | Check that `python3` and PyGObject are installed, then run `python3 ~/.local/bin/claude-usage-widget.py --panel` to see the error. |
 | Extension doesn't appear | Make sure you logged out and back in after installing, then check `gnome-extensions info claude-usage@local`. |
 
@@ -138,7 +142,17 @@ journalctl -f -o cat /usr/bin/gnome-shell
 
 ## Configuration
 
-The poll interval is `POLL_SECONDS` at the top of both `extension.js` and `claude-usage-widget.py`. Going much below 15 seconds risks HTTP 429 rate limits.
+Settings at the top of `bin/claude-usage-widget.py`:
+
+| Setting | Default | What it does |
+|---|---|---|
+| `MIN_FETCH_SECONDS` | `60` | Minimum time between real API calls. Lowering it risks HTTP 429. |
+| `FIRST_BACKOFF` / `MAX_BACKOFF` | `120` / `900` | Rate-limit backoff range, in seconds |
+| `UI_REFRESH_SECONDS` | `15` | How often the usage window re-reads the cache |
+
+`POLL_SECONDS` in `extension.js` is how often the top bar re-reads the cache. It's cheap and doesn't call the API.
+
+Re-run `./install.sh` after editing.
 
 ## Uninstall
 
