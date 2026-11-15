@@ -1,12 +1,16 @@
-# Claude Usage — GNOME Shell extension
+<p align="center">
+  <img src="icons/claude-usage-bot.svg" alt="Claude Usage bot icon" width="112">
+</p>
 
-See your Claude plan usage in the GNOME top bar, so the 5-hour limit doesn't catch you by surprise halfway through a task.
+<h1 align="center">Claude Usage — GNOME Shell extension</h1>
 
-```
-🤖 42% · 17%
-```
+<p align="center">See your Claude plan usage in the GNOME top bar, so the 5-hour limit doesn't catch you by surprise halfway through a task.</p>
 
-- **Top bar:** `<5-hour %> · <weekly %>` next to a small bot icon.
+<p align="center">
+  <img src="icons/claude-usage-bot.svg" alt="" width="18" align="absmiddle">&nbsp;<code>42% · 17%</code>
+</p>
+
+- **Top bar:** `<5-hour %> · <weekly %>` next to the pixel bot icon.
 - **Click it** for details (`5-hour: 42% · resets in 2h 30m`, `Weekly: …`), plus **Refresh now** and **Open usage window**.
 - **Usage window:** a small GTK window with a progress bar for each limit.
 - Refreshes every 15 seconds and whenever you open the menu.
